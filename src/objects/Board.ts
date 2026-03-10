@@ -12,8 +12,6 @@ import {
   GemType,
   SpecialGemType,
   BlockerType,
-  STONE_COLOR_INT,
-  STONE_LIGHT_INT,
   POINTS_PER_GEM,
   COMBO_MULTIPLIERS,
   SWIPE_THRESHOLD,
@@ -253,21 +251,14 @@ export class Board {
 
   private drawBoardBackground(): void {
     const cellSize = GEM_SIZE + GEM_PADDING;
-    const boardWidth = GRID_COLS * cellSize + GEM_PADDING;
-    const boardHeight = GRID_ROWS * cellSize + GEM_PADDING;
-    const boardX = GRID_OFFSET_X - GEM_PADDING;
-    const boardY = GRID_OFFSET_Y - GEM_PADDING;
-
-    const bg = this.scene.add.graphics();
-    bg.fillStyle(STONE_COLOR_INT, 0.6);
-    bg.fillRoundedRect(boardX - 4, boardY - 4, boardWidth + 8, boardHeight + 8, 12);
 
     for (let row = 0; row < GRID_ROWS; row++) {
       for (let col = 0; col < GRID_COLS; col++) {
-        const x = GRID_OFFSET_X + col * cellSize;
-        const y = GRID_OFFSET_Y + row * cellSize;
-        bg.fillStyle(STONE_LIGHT_INT, 0.2);
-        bg.fillRoundedRect(x, y, GEM_SIZE, GEM_SIZE, 6);
+        const x = GRID_OFFSET_X + col * cellSize + GEM_SIZE / 2;
+        const y = GRID_OFFSET_Y + row * cellSize + GEM_SIZE / 2;
+        const cellBg = this.scene.add.image(x, y, 'cell_bg');
+        cellBg.setDisplaySize(GEM_SIZE, GEM_SIZE);
+        cellBg.setDepth(4);
       }
     }
   }
