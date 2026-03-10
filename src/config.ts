@@ -77,6 +77,41 @@ export const STONE_COLOR_INT = 0x4A4A4A;
 export const STONE_LIGHT_INT = 0x6A6A6A;
 export const CAVE_BG_INT = 0x1A1A2E;
 
+// Cave background gradient colors
+export const CAVE_TOP_INT = 0x1A1A2E;
+export const CAVE_BOTTOM_INT = 0x0D0D1A;
+
+// Stone frame colors
+export const STONE_FRAME_INT = 0x5A5050;
+export const STONE_FRAME_LIGHT_INT = 0x7A7070;
+export const STONE_FRAME_DARK_INT = 0x3A3030;
+export const STONE_CRACK_INT = 0x4A4040;
+
+// Cave wall/stalactite colors
+export const CAVE_WALL_INT = 0x2A1E1A;
+export const CAVE_WALL_LIGHT_INT = 0x3A2E2A;
+export const STALACTITE_DARK_INT = 0x3A3040;
+export const STALACTITE_LIGHT_INT = 0x4A4050;
+
+// Torch glow colors
+export const TORCH_YELLOW_INT = 0xFFAA33;
+export const TORCH_ORANGE_INT = 0xFF6B20;
+
+// Cell background
+export const CELL_BG_INT = 0x3A2A1A;
+export const CELL_BORDER_INT = 0x2A1A0A;
+
+// Floor color
+export const CAVE_FLOOR_INT = 0x2A1E16;
+export const CAVE_FLOOR_LIGHT_INT = 0x3A2E26;
+
+// Bolt/nail color
+export const BOLT_COLOR_INT = 0x808080;
+export const BOLT_HIGHLIGHT_INT = 0xA0A0A0;
+
+// Chain color
+export const CHAIN_COLOR_INT = 0x6A6A6A;
+
 // Scoring
 export const POINTS_PER_GEM = 10;
 export const COMBO_MULTIPLIERS = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];

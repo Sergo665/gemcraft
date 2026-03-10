@@ -48,10 +48,7 @@ export class BootScene extends Phaser.Scene {
       loadingText.destroy();
     });
 
-    // Background
-    this.load.image('cave_bg', 'assets/cave_bg.png');
-
-    // Gems
+    // Gems (6 types)
     this.load.image('gem_ruby', 'assets/gems/gem_ruby.png');
     this.load.image('gem_sapphire', 'assets/gems/gem_sapphire.png');
     this.load.image('gem_emerald', 'assets/gems/gem_emerald.png');
@@ -59,27 +56,13 @@ export class BootScene extends Phaser.Scene {
     this.load.image('gem_amethyst', 'assets/gems/gem_amethyst.png');
     this.load.image('gem_topaz', 'assets/gems/gem_topaz.png');
 
-    // UI
-    this.load.image('stone_frame', 'assets/ui/stone_frame.png');
-    this.load.image('goal_panel', 'assets/ui/goal_panel.png');
-    this.load.image('btn_hammer', 'assets/ui/btn_hammer.png');
-    this.load.image('btn_shuffle', 'assets/ui/btn_shuffle.png');
-    this.load.image('btn_rainbow', 'assets/ui/btn_rainbow.png');
-    this.load.image('icon_ruby', 'assets/ui/icon_ruby.png');
-    this.load.image('icon_sapphire', 'assets/ui/icon_sapphire.png');
-    this.load.image('icon_emerald', 'assets/ui/icon_emerald.png');
-    this.load.image('icon_amber', 'assets/ui/icon_amber.png');
-    this.load.image('icon_amethyst', 'assets/ui/icon_amethyst.png');
-    this.load.image('cell_bg', 'assets/ui/cell_bg.png');
-    this.load.image('torch', 'assets/ui/torch.png');
-
-    // FX
+    // FX (4 types)
     this.load.image('fx_stripe_h', 'assets/fx/fx_stripe_h.png');
     this.load.image('fx_stripe_v', 'assets/fx/fx_stripe_v.png');
     this.load.image('fx_bomb', 'assets/fx/fx_bomb.png');
     this.load.image('fx_rainbow', 'assets/fx/fx_rainbow.png');
 
-    // Blockers
+    // Blockers (3 types)
     this.load.image('blocker_ice', 'assets/blockers/blocker_ice.png');
     this.load.image('blocker_rock', 'assets/blockers/blocker_rock.png');
     this.load.image('blocker_key', 'assets/blockers/blocker_key.png');

@@ -11,9 +11,27 @@ import {
   GRID_OFFSET_X,
   GRID_OFFSET_Y,
   CAVE_BG_INT,
+  CAVE_TOP_INT,
+  CAVE_BOTTOM_INT,
+  CAVE_WALL_INT,
+  CAVE_WALL_LIGHT_INT,
+  STALACTITE_DARK_INT,
+  STALACTITE_LIGHT_INT,
+  TORCH_YELLOW_INT,
+  TORCH_ORANGE_INT,
+  CAVE_FLOOR_INT,
+  CAVE_FLOOR_LIGHT_INT,
+  STONE_FRAME_INT,
+  STONE_FRAME_LIGHT_INT,
+  STONE_FRAME_DARK_INT,
+  STONE_CRACK_INT,
   WOOD_COLOR_INT,
   WOOD_DARK_INT,
   STONE_COLOR_INT,
+  BOLT_COLOR_INT,
+  BOLT_HIGHLIGHT_INT,
+  CHAIN_COLOR_INT,
+  GEM_COLORS_INT,
   GoalType,
   GemType,
 } from '../config';
@@ -28,19 +46,10 @@ import { formatNumber } from '../utils/helpers';
 const HEADER_HEIGHT = 140;
 const BOOSTER_PANEL_Y = GAME_HEIGHT - 80;
 
-/** Mapping gem color → goal icon texture key */
-const GOAL_ICON_MAP: Record<GemType, string> = {
-  ruby: 'icon_ruby',
-  sapphire: 'icon_sapphire',
-  emerald: 'icon_emerald',
-  amber: 'icon_amber',
-  amethyst: 'icon_amethyst',
-  topaz: 'icon_ruby', // no dedicated icon, reuse ruby
-};
-
 /**
  * GameScene — main match-3 gameplay scene.
  * Cave background, goal header, booster panel, modal windows.
+ * All visuals drawn programmatically via Phaser Graphics API.
  */
 export class GameScene extends Phaser.Scene {
   private board!: Board;
@@ -57,8 +66,8 @@ export class GameScene extends Phaser.Scene {
   private goalProgressBars: Phaser.GameObjects.Graphics[] = [];
   private scoreText!: Phaser.GameObjects.Text;
 
-  // Torch sprites for animation
-  private torchSprites: Phaser.GameObjects.Image[] = [];
+  // Torch glow objects for animation
+  private torchGlows: Phaser.GameObjects.Ellipse[] = [];
 
   // Modal container
   private modalContainer: Phaser.GameObjects.Container | null = null;
@@ -77,6 +86,7 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.isGameOver = false;
     this.gameStarted = false;
+    this.torchGlows = [];
     this.cameras.main.setBackgroundColor(CAVE_BG_INT);
 
     this.soundSystem = this.registry.get('soundSystem') as SoundSystem ?? null;
@@ -126,42 +136,161 @@ export class GameScene extends Phaser.Scene {
     this.showPreLevelModal(config);
   }
 
-  // ─── Cave background ───────────────────────────────────────
+  // ─── Cave background (programmatic) ────────────────────────
 
   private drawCaveBackground(): void {
-    // Full-screen cave background sprite
-    const bg = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'cave_bg');
-    bg.setDisplaySize(GAME_WIDTH, GAME_HEIGHT);
-    bg.setDepth(0);
+    const g = this.add.graphics();
+    g.setDepth(0);
 
-    // Torches on sides
-    this.placeTorch(30, 350);
-    this.placeTorch(GAME_WIDTH - 30, 350);
-    this.placeTorch(30, 600);
-    this.placeTorch(GAME_WIDTH - 30, 600);
+    // Dark gradient from top to bottom via horizontal strips
+    const stripCount = 20;
+    const stripH = GAME_HEIGHT / stripCount;
+    for (let i = 0; i < stripCount; i++) {
+      const t = i / (stripCount - 1);
+      const color = Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.IntegerToColor(CAVE_TOP_INT),
+        Phaser.Display.Color.IntegerToColor(CAVE_BOTTOM_INT),
+        1,
+        t,
+      );
+      const intColor = Phaser.Display.Color.GetColor(
+        Math.round(color.r),
+        Math.round(color.g),
+        Math.round(color.b),
+      );
+      g.fillStyle(intColor, 1);
+      g.fillRect(0, i * stripH, GAME_WIDTH, stripH + 1);
+    }
+
+    // Stone walls on left side (irregular dark-brown rectangles)
+    this.drawCaveWall(g, 0, 0, 28, GAME_HEIGHT);
+    this.drawCaveWall(g, GAME_WIDTH - 28, 0, 28, GAME_HEIGHT);
+
+    // Stalactites hanging from top
+    this.drawStalactites(g);
+
+    // Stone floor at the bottom (below boosters)
+    this.drawCaveFloor(g);
+
+    // Torches — glow-only, no sprites
+    this.placeTorchGlow(30, 350);
+    this.placeTorchGlow(GAME_WIDTH - 30, 350);
+    this.placeTorchGlow(30, 600);
+    this.placeTorchGlow(GAME_WIDTH - 30, 600);
   }
 
-  private placeTorch(x: number, y: number): void {
-    const torch = this.add.image(x, y, 'torch');
-    torch.setDisplaySize(40, 80);
-    torch.setDepth(1);
-    this.torchSprites.push(torch);
+  /** Draw irregular cave wall strip. */
+  private drawCaveWall(
+    g: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ): void {
+    // Base wall
+    g.fillStyle(CAVE_WALL_INT, 1);
+    g.fillRect(x, y, w, h);
 
-    // Flicker animation (alpha pulse)
+    // Irregular bumps (lighter patches at random intervals)
+    const bumpCount = 12;
+    for (let i = 0; i < bumpCount; i++) {
+      const by = y + (h / bumpCount) * i + Math.random() * 20;
+      const bw = w * (0.4 + Math.random() * 0.5);
+      const bh = 20 + Math.random() * 30;
+      const bx = x + (w - bw) * Math.random();
+      g.fillStyle(CAVE_WALL_LIGHT_INT, 0.3 + Math.random() * 0.2);
+      g.fillRect(bx, by, bw, bh);
+    }
+  }
+
+  /** Draw stalactites hanging from the ceiling. */
+  private drawStalactites(g: Phaser.GameObjects.Graphics): void {
+    // Spread across the width, varying sizes
+    const positions = [40, 90, 140, 200, 260, 310, 370, 430, 480, 510];
+    for (const px of positions) {
+      const height = 20 + Math.floor(Math.random() * 40);
+      const halfW = 5 + Math.floor(Math.random() * 8);
+      const color = Math.random() > 0.5 ? STALACTITE_DARK_INT : STALACTITE_LIGHT_INT;
+      g.fillStyle(color, 0.7 + Math.random() * 0.3);
+      g.fillTriangle(
+        px - halfW, 0,
+        px + halfW, 0,
+        px + (Math.random() - 0.5) * 4, height,
+      );
+    }
+  }
+
+  /** Draw stone floor at the bottom of the cave. */
+  private drawCaveFloor(g: Phaser.GameObjects.Graphics): void {
+    const floorY = GAME_HEIGHT - 120;
+    const floorH = 120;
+
+    g.fillStyle(CAVE_FLOOR_INT, 1);
+    g.fillRect(0, floorY, GAME_WIDTH, floorH);
+
+    // Stone tile lines
+    for (let x = 0; x < GAME_WIDTH; x += 70 + Math.floor(Math.random() * 20)) {
+      g.fillStyle(CAVE_FLOOR_LIGHT_INT, 0.2);
+      g.fillRect(x, floorY, 2, floorH);
+    }
+    // Horizontal line at top of floor
+    g.fillStyle(CAVE_WALL_INT, 0.6);
+    g.fillRect(0, floorY, GAME_WIDTH, 3);
+  }
+
+  /**
+   * Place a torch as a glow-only effect (no sprite).
+   * Yellow-orange ellipses with ADD blend and alpha pulse tween.
+   */
+  private placeTorchGlow(x: number, y: number): void {
+    // Torch bracket (small brown rectangle on the wall)
+    const bracket = this.add.graphics();
+    bracket.setDepth(1);
+    bracket.fillStyle(CAVE_WALL_LIGHT_INT, 0.8);
+    bracket.fillRect(x - 4, y + 5, 8, 20);
+    bracket.fillStyle(0x4A3020, 1);
+    bracket.fillRect(x - 3, y - 5, 6, 14);
+
+    // Outer glow (large, faint)
+    const outerGlow = this.add.ellipse(x, y - 20, 60, 80, TORCH_ORANGE_INT, 0.12);
+    outerGlow.setBlendMode(Phaser.BlendModes.ADD);
+    outerGlow.setDepth(1);
+
+    // Inner glow (small, bright)
+    const innerGlow = this.add.ellipse(x, y - 15, 28, 40, TORCH_YELLOW_INT, 0.25);
+    innerGlow.setBlendMode(Phaser.BlendModes.ADD);
+    innerGlow.setDepth(1);
+
+    this.torchGlows.push(outerGlow, innerGlow);
+
+    // Flicker animation on outer glow
     this.tweens.add({
-      targets: torch,
-      alpha: { from: 0.85, to: 1.0 },
-      scaleX: { from: 0.95, to: 1.05 },
-      scaleY: { from: 0.95, to: 1.05 },
+      targets: outerGlow,
+      alpha: { from: 0.08, to: 0.18 },
+      scaleX: { from: 0.9, to: 1.1 },
+      scaleY: { from: 0.9, to: 1.1 },
       duration: 400 + Math.random() * 300,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
       delay: Math.random() * 200,
     });
+
+    // Flicker animation on inner glow
+    this.tweens.add({
+      targets: innerGlow,
+      alpha: { from: 0.18, to: 0.35 },
+      scaleX: { from: 0.95, to: 1.08 },
+      scaleY: { from: 0.95, to: 1.08 },
+      duration: 300 + Math.random() * 250,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+      delay: Math.random() * 150,
+    });
   }
 
-  // ─── Stone frame around the board ──────────────────────────
+  // ─── Stone frame around the board (programmatic) ───────────
 
   private drawStoneFrame(): void {
     const cellSize = GEM_SIZE + GEM_PADDING;
@@ -169,18 +298,56 @@ export class GameScene extends Phaser.Scene {
     const boardHeight = GRID_ROWS * cellSize + GEM_PADDING;
     const boardX = GRID_OFFSET_X - GEM_PADDING;
     const boardY = GRID_OFFSET_Y - GEM_PADDING;
-    const frameThickness = 14;
+    const ft = 17; // frame thickness
 
-    const frame = this.add.image(
-      boardX + boardWidth / 2,
-      boardY + boardHeight / 2,
-      'stone_frame',
-    );
-    frame.setDisplaySize(boardWidth + frameThickness * 2, boardHeight + frameThickness * 2);
-    frame.setDepth(3);
+    const g = this.add.graphics();
+    g.setDepth(3);
+
+    const fx = boardX - ft;
+    const fy = boardY - ft;
+    const fw = boardWidth + ft * 2;
+    const fh = boardHeight + ft * 2;
+    const radius = 7;
+
+    // Main stone fill
+    g.fillStyle(STONE_FRAME_INT, 1);
+    g.fillRoundedRect(fx, fy, fw, fh, radius);
+
+    // Light edge (top + left) for 3D bevel
+    g.lineStyle(2, STONE_FRAME_LIGHT_INT, 0.7);
+    // Top edge
+    g.lineBetween(fx + radius, fy + 1, fx + fw - radius, fy + 1);
+    // Left edge
+    g.lineBetween(fx + 1, fy + radius, fx + 1, fy + fh - radius);
+
+    // Dark edge (bottom + right) for shadow
+    g.lineStyle(2, STONE_FRAME_DARK_INT, 0.7);
+    // Bottom edge
+    g.lineBetween(fx + radius, fy + fh - 1, fx + fw - radius, fy + fh - 1);
+    // Right edge
+    g.lineBetween(fx + fw - 1, fy + radius, fx + fw - 1, fy + fh - radius);
+
+    // Horizontal "cracks" at intervals
+    const crackInterval = 45;
+    g.lineStyle(1, STONE_CRACK_INT, 0.4);
+    for (let cy = fy + crackInterval; cy < fy + fh - 10; cy += crackInterval + Math.random() * 15) {
+      // Crack on left part of frame
+      g.lineBetween(fx + 3, cy, fx + ft - 2, cy + (Math.random() - 0.5) * 4);
+      // Crack on right part of frame
+      g.lineBetween(fx + fw - ft + 2, cy, fx + fw - 3, cy + (Math.random() - 0.5) * 4);
+    }
+    // Vertical cracks on top/bottom
+    for (let cx = fx + crackInterval; cx < fx + fw - 10; cx += crackInterval + Math.random() * 15) {
+      g.lineBetween(cx, fy + 3, cx + (Math.random() - 0.5) * 4, fy + ft - 2);
+      g.lineBetween(cx, fy + fh - ft + 2, cx + (Math.random() - 0.5) * 4, fy + fh - 3);
+    }
+
+    // Cut out the inner area (board area) — draw dark inset
+    g.fillStyle(0x1A1010, 0.3);
+    g.fillRoundedRect(boardX - 2, boardY - 2, boardWidth + 4, boardHeight + 4, 3);
   }
 
-  // ─── Goal header ───────────────────────────────────────────
+  // ─── Goal header (programmatic wooden panel) ───────────────
 
   private drawGoalHeader(config: ReturnType<LevelSystem['getCurrentLevel']> & object): void {
     const headerW = GAME_WIDTH - 40;
@@ -188,10 +355,47 @@ export class GameScene extends Phaser.Scene {
     const headerX = 20;
     const headerY = 50;
 
-    // Wooden plaque sprite
-    const panel = this.add.image(headerX + headerW / 2, headerY + headerH / 2, 'goal_panel');
-    panel.setDisplaySize(headerW, headerH);
-    panel.setDepth(20);
+    const g = this.add.graphics();
+    g.setDepth(20);
+
+    // Chains hanging from top
+    g.lineStyle(2, CHAIN_COLOR_INT, 0.6);
+    g.lineBetween(headerX + 40, 0, headerX + 40, headerY);
+    g.lineBetween(headerX + headerW - 40, 0, headerX + headerW - 40, headerY);
+    // Chain link dots
+    for (let cy = 5; cy < headerY; cy += 10) {
+      g.fillStyle(CHAIN_COLOR_INT, 0.4);
+      g.fillCircle(headerX + 40, cy, 2);
+      g.fillCircle(headerX + headerW - 40, cy, 2);
+    }
+
+    // Wooden plaque background
+    g.fillStyle(WOOD_COLOR_INT, 1);
+    g.fillRoundedRect(headerX, headerY, headerW, headerH, 10);
+    g.lineStyle(2, WOOD_DARK_INT, 1);
+    g.strokeRoundedRect(headerX, headerY, headerW, headerH, 10);
+
+    // Wood grain lines
+    g.lineStyle(1, WOOD_DARK_INT, 0.15);
+    for (let gy = headerY + 8; gy < headerY + headerH - 5; gy += 7) {
+      g.lineBetween(headerX + 5, gy, headerX + headerW - 5, gy);
+    }
+
+    // Bolts at corners
+    const boltOffX = 12;
+    const boltOffY = 10;
+    const boltPositions = [
+      { x: headerX + boltOffX, y: headerY + boltOffY },
+      { x: headerX + headerW - boltOffX, y: headerY + boltOffY },
+      { x: headerX + boltOffX, y: headerY + headerH - boltOffY },
+      { x: headerX + headerW - boltOffX, y: headerY + headerH - boltOffY },
+    ];
+    for (const bp of boltPositions) {
+      g.fillStyle(BOLT_COLOR_INT, 1);
+      g.fillCircle(bp.x, bp.y, 4);
+      g.fillStyle(BOLT_HIGHLIGHT_INT, 0.7);
+      g.fillCircle(bp.x - 1, bp.y - 1, 1.5);
+    }
 
     // Level name
     const levelName = this.add.text(headerX + headerW / 2, headerY - 8, config.name, {
@@ -213,7 +417,7 @@ export class GameScene extends Phaser.Scene {
       const gx = startX + i * 120 + 30;
       const gy = headerY + headerH / 2 + 2;
 
-      // Goal icon (sprite)
+      // Goal icon (programmatic)
       this.placeGoalIcon(gx - 16, gy, goals[i]);
 
       // Goal text
@@ -266,82 +470,216 @@ export class GameScene extends Phaser.Scene {
     this.goalProgressBars.push(progressG);
   }
 
+  /**
+   * Draw a programmatic goal icon instead of using a sprite.
+   */
   private placeGoalIcon(x: number, y: number, goal: Readonly<Goal>): void {
-    let textureKey: string | null = null;
+    const g = this.add.graphics();
+    g.setDepth(21);
 
     switch (goal.type) {
-      case GoalType.COLLECT_COLOR:
+      case GoalType.COLLECT_COLOR: {
+        // Small diamond/rhombus of the gem color
         if (goal.color) {
-          textureKey = GOAL_ICON_MAP[goal.color];
+          const color = GEM_COLORS_INT[goal.color] ?? 0xFFFFFF;
+          const s = 10; // half-size
+          g.fillStyle(color, 1);
+          g.fillPoints([
+            new Phaser.Geom.Point(x, y - s),
+            new Phaser.Geom.Point(x + s, y),
+            new Phaser.Geom.Point(x, y + s),
+            new Phaser.Geom.Point(x - s, y),
+          ], true);
+          // Highlight
+          g.fillStyle(0xFFFFFF, 0.3);
+          g.fillPoints([
+            new Phaser.Geom.Point(x, y - s),
+            new Phaser.Geom.Point(x + s * 0.4, y - s * 0.3),
+            new Phaser.Geom.Point(x, y),
+            new Phaser.Geom.Point(x - s * 0.4, y - s * 0.3),
+          ], true);
         }
         break;
-      case GoalType.BREAK_ICE:
-        textureKey = 'blocker_ice';
-        break;
-      case GoalType.DROP_ITEM:
-        textureKey = 'blocker_key';
-        break;
-      case GoalType.SCORE:
-        // No dedicated sprite; use a small text star
-        break;
-    }
-
-    if (textureKey) {
-      const icon = this.add.image(x, y, textureKey);
-      icon.setDisplaySize(22, 22);
-      icon.setDepth(21);
-    } else if (goal.type === GoalType.SCORE) {
-      // Fallback: programmatic star for score goal
-      const g = this.add.graphics();
-      g.setDepth(21);
-      g.fillStyle(0xFFD700, 1);
-      const points: Phaser.Geom.Point[] = [];
-      for (let i = 0; i < 10; i++) {
-        const angle = (i / 10) * Math.PI * 2 - Math.PI / 2;
-        const radius = i % 2 === 0 ? 9 : 4;
-        points.push(new Phaser.Geom.Point(
-          x + Math.cos(angle) * radius,
-          y + Math.sin(angle) * radius,
-        ));
       }
-      g.fillPoints(points, true);
+      case GoalType.BREAK_ICE: {
+        // Light blue square with white diagonal lines (ice)
+        const hs = 10;
+        g.fillStyle(0x88CCEE, 0.9);
+        g.fillRect(x - hs, y - hs, hs * 2, hs * 2);
+        g.lineStyle(1.5, 0xFFFFFF, 0.6);
+        g.lineBetween(x - hs + 3, y - hs + 3, x + hs - 3, y + hs - 3);
+        g.lineBetween(x + hs - 3, y - hs + 3, x - hs + 3, y + hs - 3);
+        // Border
+        g.lineStyle(1, 0x66AACC, 0.8);
+        g.strokeRect(x - hs, y - hs, hs * 2, hs * 2);
+        break;
+      }
+      case GoalType.DROP_ITEM: {
+        // Yellow cross/key shape
+        const ks = 8;
+        g.fillStyle(0xFFD700, 1);
+        g.fillRect(x - 2, y - ks, 4, ks * 2); // vertical bar
+        g.fillRect(x - ks, y - 2, ks * 2, 4); // horizontal bar
+        // Small circle at center
+        g.fillStyle(0xDAA520, 1);
+        g.fillCircle(x, y, 3);
+        break;
+      }
+      case GoalType.SCORE: {
+        // Golden star
+        g.fillStyle(0xFFD700, 1);
+        const points: Phaser.Geom.Point[] = [];
+        for (let i = 0; i < 10; i++) {
+          const angle = (i / 10) * Math.PI * 2 - Math.PI / 2;
+          const radius = i % 2 === 0 ? 9 : 4;
+          points.push(new Phaser.Geom.Point(
+            x + Math.cos(angle) * radius,
+            y + Math.sin(angle) * radius,
+          ));
+        }
+        g.fillPoints(points, true);
+        break;
+      }
     }
   }
 
-  // ─── Booster panel ─────────────────────────────────────────
+  // ─── Booster panel (programmatic) ──────────────────────────
 
   private drawBoosterPanel(): void {
-    const btnSize = 60;
-    const spacing = 24;
+    const btnSize = 72;
+    const spacing = 20;
     const totalW = btnSize * 3 + spacing * 2;
     const startX = (GAME_WIDTH - totalW) / 2;
     const y = BOOSTER_PANEL_Y;
 
-    const boosters = [
-      { texture: 'btn_hammer', name: 'Молот', action: () => this.onHammerBooster() },
-      { texture: 'btn_shuffle', name: 'Микс', action: () => this.onShuffleBooster() },
-      { texture: 'btn_rainbow', name: 'Радуга', action: () => this.onRainbowBooster() },
+    interface BoosterDef {
+      name: string;
+      action: () => void;
+      drawIcon: (g: Phaser.GameObjects.Graphics, cx: number, cy: number) => void;
+    }
+
+    const boosters: BoosterDef[] = [
+      {
+        name: 'Молот',
+        action: () => this.onHammerBooster(),
+        drawIcon: (g, cx, cy) => {
+          // Hammer: gray handle + dark block head
+          g.fillStyle(0x8A8A8A, 1);
+          g.fillRect(cx - 2, cy - 4, 4, 24); // handle
+          g.fillStyle(0x555555, 1);
+          g.fillRect(cx - 10, cy - 12, 20, 12); // head
+          g.fillStyle(0x6A6A6A, 0.6);
+          g.fillRect(cx - 9, cy - 11, 18, 3); // head highlight
+        },
+      },
+      {
+        name: 'Микс',
+        action: () => this.onShuffleBooster(),
+        drawIcon: (g, cx, cy) => {
+          // Shuffle arrows: two curved arrow arcs
+          g.lineStyle(3, 0xFFFFFF, 0.9);
+          // Top arc (right-pointing)
+          g.beginPath();
+          g.arc(cx, cy - 2, 12, -Math.PI * 0.8, -Math.PI * 0.15, false);
+          g.strokePath();
+          // Arrowhead for top
+          g.fillStyle(0xFFFFFF, 0.9);
+          g.fillTriangle(
+            cx + 10, cy - 8,
+            cx + 14, cy - 2,
+            cx + 6, cy - 2,
+          );
+          // Bottom arc (left-pointing)
+          g.lineStyle(3, 0xFFFFFF, 0.9);
+          g.beginPath();
+          g.arc(cx, cy + 2, 12, Math.PI * 0.2, Math.PI * 0.85, false);
+          g.strokePath();
+          // Arrowhead for bottom
+          g.fillTriangle(
+            cx - 10, cy + 8,
+            cx - 14, cy + 2,
+            cx - 6, cy + 2,
+          );
+        },
+      },
+      {
+        name: 'Радуга',
+        action: () => this.onRainbowBooster(),
+        drawIcon: (g, cx, cy) => {
+          // Rainbow diamond — multi-colored rhombus
+          const colors = [
+            GEM_COLORS_INT.ruby,
+            GEM_COLORS_INT.sapphire,
+            GEM_COLORS_INT.emerald,
+            GEM_COLORS_INT.amber,
+            GEM_COLORS_INT.amethyst,
+            GEM_COLORS_INT.topaz,
+          ];
+          const s = 14;
+          // Draw 6 triangular slices from center
+          for (let i = 0; i < 6; i++) {
+            const a1 = (i / 6) * Math.PI * 2 - Math.PI / 2;
+            const a2 = ((i + 1) / 6) * Math.PI * 2 - Math.PI / 2;
+            g.fillStyle(colors[i], 1);
+            g.fillTriangle(
+              cx, cy,
+              cx + Math.cos(a1) * s, cy + Math.sin(a1) * s,
+              cx + Math.cos(a2) * s, cy + Math.sin(a2) * s,
+            );
+          }
+          // White center highlight
+          g.fillStyle(0xFFFFFF, 0.35);
+          g.fillCircle(cx, cy, 4);
+        },
+      },
     ];
 
     for (let i = 0; i < boosters.length; i++) {
       const bx = startX + i * (btnSize + spacing) + btnSize / 2;
       const by = y + btnSize / 2;
 
-      // Button sprite
-      const btn = this.add.image(bx, by, boosters[i].texture);
-      btn.setDisplaySize(btnSize, btnSize);
-      btn.setDepth(20);
-      btn.setInteractive({ cursor: 'pointer' });
+      // Wooden button background
+      const bg = this.add.graphics();
+      bg.setDepth(20);
+      bg.fillStyle(WOOD_COLOR_INT, 1);
+      bg.fillRoundedRect(bx - btnSize / 2, by - btnSize / 2, btnSize, btnSize, 10);
+      bg.lineStyle(2, WOOD_DARK_INT, 1);
+      bg.strokeRoundedRect(bx - btnSize / 2, by - btnSize / 2, btnSize, btnSize, 10);
+
+      // Bolts at corners of button
+      const boff = 8;
+      const boltPositions = [
+        { x: bx - btnSize / 2 + boff, y: by - btnSize / 2 + boff },
+        { x: bx + btnSize / 2 - boff, y: by - btnSize / 2 + boff },
+        { x: bx - btnSize / 2 + boff, y: by + btnSize / 2 - boff },
+        { x: bx + btnSize / 2 - boff, y: by + btnSize / 2 - boff },
+      ];
+      for (const bp of boltPositions) {
+        bg.fillStyle(BOLT_COLOR_INT, 0.8);
+        bg.fillCircle(bp.x, bp.y, 3);
+        bg.fillStyle(BOLT_HIGHLIGHT_INT, 0.5);
+        bg.fillCircle(bp.x - 0.5, bp.y - 0.5, 1.2);
+      }
+
+      // Icon drawn programmatically
+      const iconG = this.add.graphics();
+      iconG.setDepth(21);
+      boosters[i].drawIcon(iconG, bx, by);
+
+      // Interactive area
+      const hitArea = this.add.rectangle(bx, by, btnSize, btnSize, 0x000000, 0);
+      hitArea.setInteractive({ cursor: 'pointer' });
+      hitArea.setDepth(22);
 
       const action = boosters[i].action;
-      btn.on('pointerdown', () => {
+      hitArea.on('pointerdown', () => {
         if (this.isGameOver || !this.gameStarted || this.board.isLocked()) return;
         this.soundSystem?.playButtonClick();
-        // Press feedback
+        // Press feedback on the background graphic
         this.tweens.add({
-          targets: btn,
-          scaleX: btn.scaleX * 0.9,
-          scaleY: btn.scaleY * 0.9,
+          targets: [bg, iconG],
+          scaleX: 0.9,
+          scaleY: 0.9,
           duration: 80,
           yoyo: true,
           onComplete: () => action(),

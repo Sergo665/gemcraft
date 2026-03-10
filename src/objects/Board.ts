@@ -251,14 +251,25 @@ export class Board {
 
   private drawBoardBackground(): void {
     const cellSize = GEM_SIZE + GEM_PADDING;
+    const cellBgColor = 0x3A2A1A;
+    const cellBorderColor = 0x2A1A0A;
+
+    const g = this.scene.add.graphics();
+    g.setDepth(4);
 
     for (let row = 0; row < GRID_ROWS; row++) {
       for (let col = 0; col < GRID_COLS; col++) {
-        const x = GRID_OFFSET_X + col * cellSize + GEM_SIZE / 2;
-        const y = GRID_OFFSET_Y + row * cellSize + GEM_SIZE / 2;
-        const cellBg = this.scene.add.image(x, y, 'cell_bg');
-        cellBg.setDisplaySize(GEM_SIZE, GEM_SIZE);
-        cellBg.setDepth(4);
+        const x = GRID_OFFSET_X + col * cellSize;
+        const y = GRID_OFFSET_Y + row * cellSize;
+
+        // Subtle checkerboard: even/odd cells differ slightly in alpha
+        const isEven = (row + col) % 2 === 0;
+        const alpha = isEven ? 0.55 : 0.65;
+
+        g.fillStyle(cellBgColor, alpha);
+        g.fillRoundedRect(x, y, GEM_SIZE, GEM_SIZE, 4);
+        g.lineStyle(1, cellBorderColor, 0.5);
+        g.strokeRoundedRect(x, y, GEM_SIZE, GEM_SIZE, 4);
       }
     }
   }
