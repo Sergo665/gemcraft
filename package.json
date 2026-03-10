@@ -1,0 +1,19 @@
+{
+  "name": "gemcraft",
+  "version": "0.1.0",
+  "description": "GemCraft — Match-3 puzzle game for VK Games",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "terser": "^5.46.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11"
+  }
+}
